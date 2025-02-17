@@ -1,51 +1,81 @@
 name: Publish to Pypi
 on:
-  workflow_dispatch:
-    inputs:
-      version:
-        description: 'Version upload to pypi'
-        required: true
-      pypi_repo:
-        description: 'Repo to upload to (testpypi or pypi)'
-        default: 'testpypi'
-        required: true
+  push:
+    branches:
+      - main
 
 jobs:
   publish:
-    runs-on: ubuntu-latest
     environment: publish_pypi
     permissions:
-      # IMPORTANT: this permission is mandatory for trusted publishing
       id-token: write
+    runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v4
-    - uses: actions/setup-python@v5
-      with:
-        python-version: '3.8'
-    - name: Install dependencies
-      run: |
-        pip install -U wheelhouse_uploader pyyaml
-    - name: Downloading wheels and sdist from staging
-      env:
-        SKLEARN_VERSION: ${{ github.event.inputs.version }}
-      run: |
-        echo "Download $SKLEARN_VERSION wheels and sdist"
-        python -m wheelhouse_uploader fetch \
-          --version $SKLEARN_VERSION \
-          --local-folder dist/ \
-          scikit-learn \
-          https://pypi.anaconda.org/scikit-learn-wheels-staging/simple/scikit-learn/
-    - name: Check dist has the correct number of artifacts
-      run: |
-        python build_tools/github/check_wheels.py
-    - name: Publish package to TestPyPI
-      uses: pypa/gh-action-pypi-publish@76f52bc884231f62b9a034ebfe128415bbaabdfc # v1.12.4
-      with:
-        repository-url: https://test.pypi.org/legacy/
-        print-hash: true
-      if: ${{ github.event.inputs.pypi_repo == 'testpypi' }}
-    - name: Publish package to PyPI
-      uses: pypa/gh-action-pypi-publish@76f52bc884231f62b9a034ebfe128415bbaabdfc # v1.12.4
-      if: ${{ github.event.inputs.pypi_repo == 'pypi' }}
-      with:
-        print-hash: true
+      - name: Start Energy Measurement
+        uses: green-coding-solutions/eco-ci-energy-estimation@v4
+        with:
+          json-output: true
+          task: start-measurement
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.8'
+      - name: Install dependencies
+        run: 'pip install -U wheelhouse_uploader pyyaml
+
+          '
+      - id: measurement-4
+        name: Record Measurement After Install dependencies
+        uses: green-coding-solutions/eco-ci-energy-estimation@v4
+        with:
+          json-output: true
+          label: Install dependencies
+          task: get-measurement
+      - env:
+          SKLEARN_VERSION: ${{ github.event.inputs.version }}
+        name: Downloading wheels and sdist from staging
+        run: "echo \"Download $SKLEARN_VERSION wheels and sdist\"\npython -m wheelhouse_uploader\
+          \ fetch \\\n  --version $SKLEARN_VERSION \\\n  --local-folder dist/ \\\n\
+          \  scikit-learn \\\n  https://pypi.anaconda.org/scikit-learn-wheels-staging/simple/scikit-learn/\n"
+      - id: measurement-6
+        name: Record Measurement After Downloading wheels and sdist from staging
+        uses: green-coding-solutions/eco-ci-energy-estimation@v4
+        with:
+          json-output: true
+          label: Downloading wheels and sdist from staging
+          task: get-measurement
+      - name: Check dist has the correct number of artifacts
+        run: 'python build_tools/github/check_wheels.py
+
+          '
+      - id: measurement-8
+        name: Record Measurement After Check dist has the correct number of artifacts
+        uses: green-coding-solutions/eco-ci-energy-estimation@v4
+        with:
+          json-output: true
+          label: Check dist has the correct number of artifacts
+          task: get-measurement
+      - if: ${{ github.event.inputs.pypi_repo == 'testpypi' }}
+        name: Publish package to TestPyPI
+        uses: pypa/gh-action-pypi-publish@76f52bc884231f62b9a034ebfe128415bbaabdfc
+        with:
+          print-hash: true
+          repository-url: https://test.pypi.org/legacy/
+      - if: ${{ github.event.inputs.pypi_repo == 'pypi' }}
+        name: Publish package to PyPI
+        uses: pypa/gh-action-pypi-publish@76f52bc884231f62b9a034ebfe128415bbaabdfc
+        with:
+          print-hash: true
+      - id: display-measurement
+        name: Display Energy Results
+        uses: green-coding-solutions/eco-ci-energy-estimation@v4
+        with:
+          json-output: true
+          task: display-results
+      - name: Save Total Energy Consumption Data
+        run: echo '${{ steps.final-measurement.outputs.data-total-json }}' > total_energy_consumption.json
+      - name: Upload Energy Consumption Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: total-energy-consumption
+          path: total_energy_consumption.json

@@ -1,24 +1,47 @@
 name: Unassign
-#Runs when a contributor has unassigned themselves from the issue and adds 'help wanted'
 on:
-  issues:
-    types: unassigned
-
-# Restrict the permissions granted to the use of secrets.GITHUB_TOKEN in this
-# github actions workflow:
-# https://docs.github.com/en/actions/security-guides/automatic-token-authentication
-permissions:
-  issues: write
+  push:
+    branches:
+      - main
 
 jobs:
   one:
     runs-on: ubuntu-latest
     steps:
-      - name:
-        if: github.event.issue.state == 'open'
-        run: |
-          echo "Marking issue ${{ github.event.issue.number }} as help wanted"
-          gh issue edit $ISSUE --add-label "help wanted"
-        env:
+      - name: Start Energy Measurement
+        uses: green-coding-solutions/eco-ci-energy-estimation@v4
+        with:
+          json-output: true
+          task: start-measurement
+      - env:
           GH_TOKEN: ${{ github.token }}
           ISSUE: ${{ github.event.issue.html_url }}
+        if: github.event.issue.state == 'open'
+        name: null
+        run: 'echo "Marking issue ${{ github.event.issue.number }} as help wanted"
+
+          gh issue edit $ISSUE --add-label "help wanted"
+
+          '
+      - id: measurement-2
+        name: Record Measurement After None
+        uses: green-coding-solutions/eco-ci-energy-estimation@v4
+        with:
+          json-output: true
+          label: null
+          task: get-measurement
+      - id: display-measurement
+        name: Display Energy Results
+        uses: green-coding-solutions/eco-ci-energy-estimation@v4
+        with:
+          json-output: true
+          task: display-results
+      - name: Save Total Energy Consumption Data
+        run: echo '${{ steps.final-measurement.outputs.data-total-json }}' > total_energy_consumption.json
+      - name: Upload Energy Consumption Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: total-energy-consumption
+          path: total_energy_consumption.json
+permissions:
+  issues: write

@@ -1,36 +1,53 @@
 name: Check Changelog
-permissions:
-  contents: read
-
-# This check makes sure that the changelog is properly updated
-# when a PR introduces a change in a test file.
-# To bypass this check, label the PR with "No Changelog Needed".
 on:
-  pull_request:
-    types: [opened, synchronize, labeled, unlabeled]
+  push:
+    branches:
+      - main
 
 jobs:
   check:
     name: A reviewer will let you know if it is required or can be bypassed
     runs-on: ubuntu-latest
     steps:
+      - name: Start Energy Measurement
+        uses: green-coding-solutions/eco-ci-energy-estimation@v4
+        with:
+          json-output: true
+          task: start-measurement
       - uses: actions/checkout@v4
         with:
           fetch-depth: '0'
-      - name: Check if tests have changed
-        id: tests_changed
-        run: |
-          set -xe
-          changed_files=$(git diff --name-only origin/main)
-          # Changelog should be updated only if tests have been modified
-          if [[ "$changed_files" =~ tests ]]
-          then
-            echo "check_changelog=true" >> $GITHUB_OUTPUT
-          fi
-
-      - name: Check changelog entry
-        if: steps.tests_changed.outputs.check_changelog == 'true'
-        uses: scientific-python/action-towncrier-changelog@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - id: tests_changed
+        name: Check if tests have changed
+        run: "set -xe\nchanged_files=$(git diff --name-only origin/main)\n# Changelog\
+          \ should be updated only if tests have been modified\nif [[ \"$changed_files\"\
+          \ =~ tests ]]\nthen\n  echo \"check_changelog=true\" >> $GITHUB_OUTPUT\n\
+          fi\n"
+      - id: measurement-3
+        name: Record Measurement After Check if tests have changed
+        uses: green-coding-solutions/eco-ci-energy-estimation@v4
+        with:
+          json-output: true
+          label: Check if tests have changed
+          task: get-measurement
+      - env:
           BOT_USERNAME: changelog-bot
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        if: steps.tests_changed.outputs.check_changelog == 'true'
+        name: Check changelog entry
+        uses: scientific-python/action-towncrier-changelog@v1
+      - id: display-measurement
+        name: Display Energy Results
+        uses: green-coding-solutions/eco-ci-energy-estimation@v4
+        with:
+          json-output: true
+          task: display-results
+      - name: Save Total Energy Consumption Data
+        run: echo '${{ steps.final-measurement.outputs.data-total-json }}' > total_energy_consumption.json
+      - name: Upload Energy Consumption Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: total-energy-consumption
+          path: total_energy_consumption.json
+permissions:
+  contents: read
